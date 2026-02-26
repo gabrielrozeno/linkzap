@@ -1,13 +1,36 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+
+const PIXEL_ID = '1786202755146767'
+
+// Injeta o script base do Pixel uma única vez
+function initPixel() {
+  if (window.fbq) return
+  /* eslint-disable */
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+  (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  /* eslint-enable */
+  window.fbq('init', PIXEL_ID)
+}
 
 export default function RedirectPage() {
   const { slug } = useParams()
+  const location = useLocation()
   const [group, setGroup] = useState(null)
   const [status, setStatus] = useState('loading') // loading | found | not_found | inactive
 
+  // Extrai fbclid da URL (?fbclid=XXXX)
+  const fbclid = new URLSearchParams(location.search).get('fbclid')
+
   useEffect(() => {
+    // Inicializa o Pixel e dispara PageView assim que a página carrega
+    initPixel()
+    window.fbq('track', 'PageView')
+
     async function loadAndRedirect() {
       const { data, error } = await supabase
         .from('groups')
@@ -21,12 +44,20 @@ export default function RedirectPage() {
       setGroup(data)
       setStatus('found')
 
-      // Register click
+      // Registra clique no banco
       await supabase.from('clicks').insert({ group_id: data.id })
     }
 
     loadAndRedirect()
-  }, [slug])
+  }, [slug]) // eslint-disable-line
+
+  // Dispara evento Lead com fbclid ao clicar no botão
+  const handleJoinClick = () => {
+    if (!window.fbq) return
+    const eventData = { content_name: group?.name }
+    const eventOptions = fbclid ? { eventID: fbclid } : {}
+    window.fbq('track', 'Lead', eventData, eventOptions)
+  }
 
   const bgStyle = {
     minHeight: '100vh',
@@ -104,6 +135,7 @@ export default function RedirectPage() {
         href={group.whatsapp_url}
         target="_blank"
         rel="noreferrer"
+        onClick={handleJoinClick}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 12,
           background: '#25D366', color: '#0a0a0a', borderRadius: 14,
