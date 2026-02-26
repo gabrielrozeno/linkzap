@@ -113,3 +113,4 @@ npm start
 - 🔍 Página 404 para links inválidos
 # linkzap
 # linkzap
+# linkzap
