@@ -51,12 +51,13 @@ export default function RedirectPage() {
     loadAndRedirect()
   }, [slug]) // eslint-disable-line
 
-  // Dispara evento Lead com fbclid ao clicar no botão
+  // Dispara eventos Lead + Subscribe com fbclid ao clicar no botão
   const handleJoinClick = () => {
     if (!window.fbq) return
     const eventData = { content_name: group?.name }
     const eventOptions = fbclid ? { eventID: fbclid } : {}
     window.fbq('track', 'Lead', eventData, eventOptions)
+    window.fbq('track', 'Subscribe', eventData, eventOptions)
   }
 
   const bgStyle = {
