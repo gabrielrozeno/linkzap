@@ -1,139 +1,241 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+import { useEffect, useState } from 'react'
+import { useParams, useLocation } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import RifaRedirectPage from './RifaRedirectPage'
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+const PIXEL_ID = '1786202755146767'
 
-:root {
-  --green: #25D366;
-  --green-dim: rgba(37,211,102,0.15);
-  --green-glow: rgba(37,211,102,0.25);
-  --bg: #0a0a0a;
-  --surface: rgba(255,255,255,0.03);
-  --border: rgba(255,255,255,0.07);
-  --text: #f0ede8;
-  --text-dim: rgba(240,237,232,0.4);
-  --text-muted: rgba(240,237,232,0.2);
-  --red: #ff6b6b;
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
-}
-
-html { scroll-behavior: smooth; }
-
-body {
-  font-family: var(--font-body);
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
+function initPixel() {
+  if (window.fbq) return
+  /* eslint-disable */
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+  (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  /* eslint-enable */
+  window.fbq('init', PIXEL_ID)
 }
 
-.noise {
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  opacity: 0.35;
-}
-.blob {
-  position: fixed; border-radius: 50%; pointer-events: none; z-index: 0;
-}
-.blob-1 {
-  top: -200px; right: -100px; width: 600px; height: 600px;
-  background: radial-gradient(circle, rgba(37,211,102,0.1) 0%, transparent 70%);
-}
-.blob-2 {
-  bottom: -150px; left: -200px; width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(37,211,102,0.06) 0%, transparent 70%);
+function fakeMemberCount(seed) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
+  return 312 + (Math.abs(h) % 388)
 }
 
-.page { position: relative; z-index: 1; min-height: 100vh; }
-.container { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+export default function RedirectPage() {
+  const { slug } = useParams()
+  const location = useLocation()
+  const [group, setGroup] = useState(null)
+  const [status, setStatus] = useState('loading')
+  const [spotsLeft] = useState(() => Math.floor(Math.random() * 8) + 3)
+  const [pulse, setPulse] = useState(false)
 
-/* TOAST */
-.toast {
-  position: fixed; bottom: 28px; right: 28px; z-index: 9999;
-  padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500;
-  animation: toastIn 0.3s ease;
-  display: flex; align-items: center; gap: 8px;
-}
-.toast.success {
-  background: rgba(37,211,102,0.12);
-  border: 1px solid rgba(37,211,102,0.3);
-  color: #25D366;
-}
-.toast.error {
-  background: rgba(255,107,107,0.12);
-  border: 1px solid rgba(255,107,107,0.3);
-  color: #ff6b6b;
-}
-@keyframes toastIn {
-  from { transform: translateY(16px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
+  const fbclid = new URLSearchParams(location.search).get('fbclid')
 
-/* SPINNER */
-.spinner {
-  width: 20px; height: 20px;
-  border: 2px solid rgba(37,211,102,0.2);
-  border-top-color: #25D366;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+  useEffect(() => {
+    initPixel()
+    window.fbq('track', 'PageView')
 
-/* BUTTONS */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border: none; cursor: pointer; font-family: var(--font-body); font-weight: 500;
-  transition: all 0.18s; border-radius: 10px; white-space: nowrap;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary {
-  background: var(--green); color: #0a0a0a;
-  padding: 13px 24px; font-size: 14px; font-weight: 700;
-  font-family: var(--font-display); letter-spacing: 0.5px;
-}
-.btn-primary:hover:not(:disabled) {
-  background: #20c75a;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 25px var(--green-glow);
-}
-.btn-ghost {
-  background: var(--surface); border: 1px solid var(--border);
-  color: var(--text-dim); padding: 8px 16px; font-size: 13px;
-}
-.btn-ghost:hover { background: rgba(255,255,255,0.07); color: var(--text); }
-.btn-icon {
-  background: var(--surface); border: 1px solid var(--border);
-  color: var(--text-dim); width: 34px; height: 34px; border-radius: 8px;
-  font-size: 14px; padding: 0;
-}
-.btn-icon:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-.btn-icon.danger:hover { background: rgba(255,107,107,0.12); border-color: rgba(255,107,107,0.2); color: var(--red); }
-.btn-icon.active { background: var(--green-dim); border-color: rgba(37,211,102,0.25); color: var(--green); }
+    async function load() {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('id, name, whatsapp_url, active, page_type, page_meta')
+        .eq('slug', slug)
+        .single()
 
-/* INPUTS */
-.input {
-  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 16px; color: var(--text);
-  font-family: var(--font-body); font-size: 14px; outline: none;
-  transition: border-color 0.2s, background 0.2s; width: 100%;
-}
-.input:focus { border-color: rgba(37,211,102,0.45); background: rgba(37,211,102,0.04); }
-.input::placeholder { color: var(--text-muted); }
-.input.error { border-color: rgba(255,107,107,0.4); }
+      if (error || !data) return setStatus('not_found')
+      if (!data.active) return setStatus('inactive')
+      setGroup(data)
+      setStatus('found')
+      await supabase.from('clicks').insert({ group_id: data.id })
+    }
 
-.field-error { color: var(--red); font-size: 12px; margin-top: 5px; }
-.label {
-  font-size: 11px; color: var(--text-dim); letter-spacing: 1.5px;
-  text-transform: uppercase; font-weight: 500; margin-bottom: 8px; display: block;
-}
+    load()
+  }, [slug]) // eslint-disable-line
 
-/* CARD */
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 18px; position: relative; overflow: hidden;
-}
-.card-shine::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(37,211,102,0.35), transparent);
+  useEffect(() => {
+    if (status !== 'found') return
+    const t = setInterval(() => {
+      setPulse(true)
+      setTimeout(() => setPulse(false), 600)
+    }, 4000)
+    return () => clearInterval(t)
+  }, [status])
+
+  const handleJoinClick = () => {
+    if (!window.fbq) return
+    const eventData = { content_name: group?.name }
+    const eventOptions = fbclid ? { eventID: fbclid } : {}
+    window.fbq('track', 'Lead', eventData, eventOptions)
+    window.fbq('track', 'Subscribe', eventData, eventOptions)
+  }
+
+  const bgStyle = {
+    minHeight: '100vh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    textAlign: 'center', padding: '40px 24px', position: 'relative'
+  }
+
+  if (status === 'loading') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" /><div className="blob blob-1" /><div className="blob blob-2" />
+      <span className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+    </div>
+  )
+
+  if (status === 'not_found') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" />
+      <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.3 }}>404</div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Link não encontrado</h1>
+      <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Este link é inválido ou foi removido.</p>
+    </div>
+  )
+
+  if (status === 'inactive') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" />
+      <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.3 }}>⏸</div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Grupo temporariamente indisponível</h1>
+      <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Tente novamente mais tarde.</p>
+    </div>
+  )
+
+  // ── RIFA PAGE ───────────────────────────────────────────────────
+  if (group.page_type === 'rifa') {
+    return <RifaRedirectPage group={group} onJoinClick={handleJoinClick} />
+  }
+
+  // ── STANDARD PAGE (default) ─────────────────────────────────────
+  const memberCount = fakeMemberCount(group.name)
+
+  return (
+    <div className="page" style={{ ...bgStyle, justifyContent: 'flex-start', paddingTop: 0 }}>
+      <div className="noise" /><div className="blob blob-1" /><div className="blob blob-2" />
+
+      <div style={{
+        width: '100%', background: 'linear-gradient(90deg, #ff6b00, #ff3d00)',
+        padding: '10px 24px', textAlign: 'center', position: 'sticky', top: 0, zIndex: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10
+      }}>
+        <span style={{ fontSize: 14 }}>🔥</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.3px' }}>
+          Atenção: apenas <strong style={{ textDecoration: 'underline' }}>{spotsLeft} vagas</strong> restantes neste grupo!
+        </span>
+        <span style={{ fontSize: 14 }}>🔥</span>
+      </div>
+
+      <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', padding: '48px 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+        <div style={{
+          width: 88, height: 88, background: 'rgba(37,211,102,0.12)',
+          border: '2px solid rgba(37,211,102,0.25)', borderRadius: 28,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 44, marginBottom: 28, boxShadow: '0 0 60px rgba(37,211,102,0.2)',
+          animation: 'iconPulse 2.5s ease-in-out infinite'
+        }}>💬</div>
+
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)',
+          color: '#ffd700', borderRadius: 20, padding: '5px 14px',
+          fontSize: 11, fontWeight: 700, letterSpacing: '2px',
+          textTransform: 'uppercase', marginBottom: 20
+        }}>⭐ Grupo Exclusivo</div>
+
+        <h1 style={{
+          fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 800,
+          letterSpacing: '-0.5px', marginBottom: 12, lineHeight: 1.2, color: '#f0ede8'
+        }}>
+          Você garantiu seu<br />
+          <span style={{ color: '#25D366' }}>acesso especial!</span>
+        </h1>
+
+        <p style={{ color: 'rgba(240,237,232,0.6)', fontSize: 15, marginBottom: 28, lineHeight: 1.7, maxWidth: 380 }}>
+          Entre agora no grupo <strong style={{ color: '#f0ede8' }}>{group.name}</strong> e receba promoções exclusivas, descontos imperdíveis e conteúdo VIP direto no seu WhatsApp.
+        </p>
+
+        <div style={{
+          width: '100%', background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16,
+          padding: '20px 24px', marginBottom: 28, textAlign: 'left'
+        }}>
+          {[
+            { icon: '🎯', text: 'Ofertas exclusivas antes de todo mundo' },
+            { icon: '💰', text: 'Descontos que não aparecem em nenhum outro lugar' },
+            { icon: '📣', text: 'Conteúdo VIP direto no seu WhatsApp' },
+            { icon: '🔒', text: 'Grupo fechado — acesso apenas por convite' },
+          ].map((b, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: i < 3 ? 14 : 0 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{b.icon}</span>
+              <span style={{ fontSize: 14, color: 'rgba(240,237,232,0.75)', lineHeight: 1.4 }}>{b.text}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          <div style={{ display: 'flex' }}>
+            {['😊', '🙂', '😄', '🤩', '😎'].map((e, i) => (
+              <div key={i} style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: `hsl(${120 + i * 25}, 50%, 35%)`,
+                border: '2px solid #0a0a0a', marginLeft: i > 0 ? -8 : 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14
+              }}>{e}</div>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, color: 'rgba(240,237,232,0.5)' }}>
+            <strong style={{ color: 'rgba(240,237,232,0.8)' }}>{memberCount.toLocaleString('pt-BR')} pessoas</strong> já estão no grupo
+          </span>
+        </div>
+
+        <a
+          href={group.whatsapp_url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={handleJoinClick}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+            background: 'linear-gradient(135deg, #25D366, #1aad52)',
+            color: '#fff', borderRadius: 16, padding: '18px 40px',
+            fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800,
+            textDecoration: 'none', letterSpacing: '0.3px', width: '100%',
+            boxShadow: '0 8px 30px rgba(37,211,102,0.4)', transition: 'all 0.2s',
+            transform: pulse ? 'scale(1.03)' : 'scale(1)',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'
+            e.currentTarget.style.boxShadow = '0 16px 45px rgba(37,211,102,0.5)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.boxShadow = '0 8px 30px rgba(37,211,102,0.4)'
+          }}
+        >
+          <span style={{ fontSize: 22 }}>📲</span>
+          QUERO ENTRAR AGORA
+        </a>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4444', display: 'inline-block', animation: 'blink 1s infinite' }} />
+          <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.45)' }}>
+            Restam apenas <strong style={{ color: '#ff9966' }}>{spotsLeft} vagas</strong> — o grupo pode fechar a qualquer momento
+          </span>
+        </div>
+
+        <p style={{ fontSize: 11, color: 'rgba(240,237,232,0.2)', marginTop: 32, lineHeight: 1.6 }}>
+          🔒 Seus dados estão seguros. Ao entrar, você concorda em receber<br />conteúdos e ofertas exclusivas via WhatsApp.
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes iconPulse {
+          0%,100% { box-shadow: 0 0 40px rgba(37,211,102,0.2); }
+          50% { box-shadow: 0 0 80px rgba(37,211,102,0.45); }
+        }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+      `}</style>
+    </div>
+  )
 }

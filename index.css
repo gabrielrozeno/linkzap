@@ -1,210 +1,214 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 
-function fakeSpotsLeft(seed) {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
-  return 23 + (Math.abs(h) % 74) // 23–96 bilhetes
+const PIXEL_ID = '1786202755146767'
+
+function initPixel() {
+  if (window.fbq) return
+  /* eslint-disable */
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+  (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  /* eslint-enable */
+  window.fbq('init', PIXEL_ID)
 }
 
-export default function RifaRedirectPage({ group, onJoinClick }) {
-  const location = useLocation()
-  const [pulse, setPulse] = useState(false)
-  const [tick, setTick] = useState(0)
+function fakeMemberCount(seed) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
+  return 312 + (Math.abs(h) % 388)
+}
 
-  const meta = group.page_meta || {}
-  const prize = meta.prize || 'Prêmio Especial'
-  const ticketPrice = meta.ticket_price || null
-  const spotsLeft = fakeSpotsLeft(group.name)
+export default function SetRedirectPage() {
+  const { slug } = useParams()
+  const location = useLocation()
+  const [group, setGroup] = useState(null)
+  const [status, setStatus] = useState('loading')
+  const [spotsLeft] = useState(() => Math.floor(Math.random() * 8) + 3)
+  const [pulse, setPulse] = useState(false)
+
+  const fbclid = new URLSearchParams(location.search).get('fbclid')
 
   useEffect(() => {
+    initPixel()
+    window.fbq('track', 'PageView')
+
+    async function resolveNextGroup() {
+      const { data: set, error: setError } = await supabase
+        .from('group_sets')
+        .select('id, name, active, current_index')
+        .eq('slug', slug)
+        .single()
+
+      if (setError || !set) return setStatus('not_found')
+      if (!set.active) return setStatus('inactive')
+
+      const { data: members, error: membersError } = await supabase
+        .from('group_set_members')
+        .select('position, group_id, groups(id, name, whatsapp_url, active)')
+        .eq('set_id', set.id)
+        .order('position', { ascending: true })
+
+      if (membersError || !members || members.length === 0) return setStatus('not_found')
+
+      const activeMembers = members.filter(m => m.groups?.active)
+      if (activeMembers.length === 0) return setStatus('inactive')
+
+      const idx = set.current_index % activeMembers.length
+      const chosen = activeMembers[idx].groups
+
+      await supabase.from('group_sets').update({ current_index: set.current_index + 1 }).eq('id', set.id)
+      await supabase.from('clicks').insert({ group_id: chosen.id })
+
+      setGroup(chosen)
+      setStatus('found')
+    }
+
+    resolveNextGroup()
+  }, [slug]) // eslint-disable-line
+
+  useEffect(() => {
+    if (status !== 'found') return
     const t = setInterval(() => {
       setPulse(true)
       setTimeout(() => setPulse(false), 600)
     }, 4000)
     return () => clearInterval(t)
-  }, [])
+  }, [status])
 
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 7000)
-    return () => clearInterval(t)
-  }, [])
+  const handleJoinClick = () => {
+    if (!window.fbq) return
+    const eventData = { content_name: group?.name }
+    const eventOptions = fbclid ? { eventID: fbclid } : {}
+    window.fbq('track', 'Lead', eventData, eventOptions)
+    window.fbq('track', 'Subscribe', eventData, eventOptions)
+  }
 
-  const viewersNow = 12 + (tick % 5)
+  const bgStyle = {
+    minHeight: '100vh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    textAlign: 'center', padding: '40px 24px', position: 'relative'
+  }
+
+  if (status === 'loading') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" /><div className="blob blob-1" /><div className="blob blob-2" />
+      <span className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+    </div>
+  )
+
+  if (status === 'not_found') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" />
+      <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.3 }}>🔍</div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Link não encontrado</h1>
+      <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Este link é inválido ou foi removido.</p>
+    </div>
+  )
+
+  if (status === 'inactive') return (
+    <div className="page" style={bgStyle}>
+      <div className="noise" />
+      <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.3 }}>⏸</div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Grupos temporariamente indisponíveis</h1>
+      <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Tente novamente mais tarde.</p>
+    </div>
+  )
+
+  const memberCount = fakeMemberCount(group.name)
 
   return (
-    <div className="page" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: 0, position: 'relative' }}>
-      <div className="noise" />
-
-      {/* Animated background */}
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none',
-        background: 'radial-gradient(ellipse at 60% 0%, rgba(255,180,0,0.08) 0%, transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(255,60,0,0.07) 0%, transparent 55%), #0a0a0a'
-      }}>
-        {[...Array(18)].map((_, i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            width: 6 + (i % 4) * 3, height: 6 + (i % 4) * 3,
-            borderRadius: i % 3 === 0 ? '50%' : 2,
-            background: ['#ffd700', '#ff6b35', '#25D366', '#ff4444', '#fff'][i % 5],
-            opacity: 0.15 + (i % 4) * 0.05,
-            left: `${(i * 17 + 5) % 95}%`,
-            top: `${(i * 23 + 8) % 90}%`,
-            animation: `float${i % 3} ${6 + (i % 4)}s ease-in-out infinite`,
-            animationDelay: `${i * 0.4}s`
-          }} />
-        ))}
-      </div>
+    <div className="page" style={{ ...bgStyle, justifyContent: 'flex-start', paddingTop: 0 }}>
+      <div className="noise" /><div className="blob blob-1" /><div className="blob blob-2" />
 
       {/* TOP URGENCY BANNER */}
       <div style={{
-        width: '100%', position: 'sticky', top: 0, zIndex: 10,
-        background: 'linear-gradient(90deg, #c8000a, #ff2d20, #c8000a)',
-        backgroundSize: '200% 100%', animation: 'shimmer 3s linear infinite',
-        padding: '11px 24px', textAlign: 'center',
+        width: '100%', background: 'linear-gradient(90deg, #ff6b00, #ff3d00)',
+        padding: '10px 24px', textAlign: 'center', position: 'sticky', top: 0, zIndex: 10,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10
       }}>
-        <span style={{ fontSize: 15 }}>⚠️</span>
+        <span style={{ fontSize: 14 }}>🔥</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.3px' }}>
-          ÚLTIMOS <strong style={{ fontSize: 15, textDecoration: 'underline' }}>{spotsLeft} BILHETES</strong> DISPONÍVEIS — CORRE!
+          Atenção: apenas <strong style={{ textDecoration: 'underline' }}>{spotsLeft} vagas</strong> restantes neste grupo!
         </span>
-        <span style={{ fontSize: 15 }}>⚠️</span>
+        <span style={{ fontSize: 14 }}>🔥</span>
       </div>
 
-      <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', padding: '40px 24px 48px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+      <div style={{ maxWidth: 480, width: '100%', margin: '0 auto', padding: '48px 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-        {/* TROPHY */}
         <div style={{
-          fontSize: 72, marginBottom: 8,
-          animation: 'trophyBounce 2s ease-in-out infinite',
-          filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.5))'
-        }}>🏆</div>
+          width: 88, height: 88, background: 'rgba(37,211,102,0.12)',
+          border: '2px solid rgba(37,211,102,0.25)',
+          borderRadius: 28, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: 44, marginBottom: 28,
+          boxShadow: '0 0 60px rgba(37,211,102,0.2)',
+          animation: 'iconPulse 2.5s ease-in-out infinite'
+        }}>💬</div>
 
-        {/* LIVE VIEWERS */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20,
-          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 20, padding: '5px 14px'
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)',
+          color: '#ffd700', borderRadius: 20, padding: '5px 14px',
+          fontSize: 11, fontWeight: 700, letterSpacing: '2px',
+          textTransform: 'uppercase', marginBottom: 20
         }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff4444', display: 'inline-block', animation: 'blink 1s infinite' }} />
-          <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.55)' }}>
-            <strong style={{ color: 'rgba(240,237,232,0.85)' }}>{viewersNow} pessoas</strong> vendo agora
-          </span>
+          ⭐ Grupo Exclusivo
         </div>
 
-        {/* PRIZE CARD */}
-        <div style={{
-          width: '100%', borderRadius: 20, marginBottom: 24, overflow: 'hidden',
-          border: '1.5px solid rgba(255,215,0,0.3)',
-          background: 'linear-gradient(135deg, rgba(255,215,0,0.07) 0%, rgba(255,140,0,0.05) 100%)',
-          boxShadow: '0 0 40px rgba(255,215,0,0.1)',
-        }}>
-          <div style={{
-            background: 'linear-gradient(90deg, rgba(255,215,0,0.15), rgba(255,140,0,0.1))',
-            padding: '10px 20px', borderBottom: '1px solid rgba(255,215,0,0.15)',
-            display: 'flex', alignItems: 'center', gap: 8
-          }}>
-            <span style={{ fontSize: 14 }}>🎁</span>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,215,0,0.8)' }}>
-              Prêmio em Disputa
-            </span>
-          </div>
-          <div style={{ padding: '20px 24px', textAlign: 'center' }}>
-            <div style={{
-              fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800,
-              color: '#ffd700', letterSpacing: '-0.5px', lineHeight: 1.2,
-              textShadow: '0 0 30px rgba(255,215,0,0.4)', marginBottom: 6
-            }}>{prize}</div>
-            <div style={{ fontSize: 13, color: 'rgba(240,237,232,0.4)' }}>{group.name}</div>
-          </div>
-        </div>
-
-        {/* HEADLINE */}
         <h1 style={{
-          fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800,
-          letterSpacing: '-0.5px', marginBottom: 10, lineHeight: 1.25,
-          color: '#f0ede8', textAlign: 'center'
+          fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 800,
+          letterSpacing: '-0.5px', marginBottom: 12, lineHeight: 1.2, color: '#f0ede8'
         }}>
-          Participe e concorra a<br />
-          <span style={{ color: '#ffd700' }}>esse prêmio incrível!</span>
+          Você garantiu seu<br />
+          <span style={{ color: '#25D366' }}>acesso especial!</span>
         </h1>
 
-        <p style={{ color: 'rgba(240,237,232,0.55)', fontSize: 14, marginBottom: 24, lineHeight: 1.7, textAlign: 'center', maxWidth: 360 }}>
-          Entre no grupo do WhatsApp, adquira seu bilhete e garanta sua chance de ganhar. Sorteio transparente e ao vivo!
+        <p style={{ color: 'rgba(240,237,232,0.6)', fontSize: 15, marginBottom: 28, lineHeight: 1.7, maxWidth: 380 }}>
+          Entre agora no grupo <strong style={{ color: '#f0ede8' }}>{group.name}</strong> e receba promoções exclusivas, descontos imperdíveis e conteúdo VIP direto no seu WhatsApp.
         </p>
 
-        {/* INFO PILLS */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {ticketPrice && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.25)',
-              borderRadius: 30, padding: '8px 16px'
-            }}>
-              <span style={{ fontSize: 16 }}>💵</span>
-              <div>
-                <div style={{ fontSize: 10, color: 'rgba(240,237,232,0.35)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Bilhete por</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#25D366', fontFamily: 'var(--font-display)' }}>{ticketPrice}</div>
-              </div>
-            </div>
-          )}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'rgba(255,100,0,0.1)', border: '1px solid rgba(255,100,0,0.25)',
-            borderRadius: 30, padding: '8px 16px'
-          }}>
-            <span style={{ fontSize: 16 }}>🎟️</span>
-            <div>
-              <div style={{ fontSize: 10, color: 'rgba(240,237,232,0.35)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Restam</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9944', fontFamily: 'var(--font-display)' }}>{spotsLeft} bilhetes</div>
-            </div>
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
-            borderRadius: 30, padding: '8px 16px'
-          }}>
-            <span style={{ fontSize: 16 }}>✅</span>
-            <div>
-              <div style={{ fontSize: 10, color: 'rgba(240,237,232,0.35)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Sorteio</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#ffd700', fontFamily: 'var(--font-display)' }}>Ao vivo</div>
-            </div>
-          </div>
-        </div>
-
-        {/* HOW IT WORKS */}
         <div style={{
-          width: '100%', background: 'rgba(255,255,255,0.025)',
+          width: '100%', background: 'rgba(255,255,255,0.03)',
           border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16,
-          padding: '18px 20px', marginBottom: 28, textAlign: 'left'
+          padding: '20px 24px', marginBottom: 28, textAlign: 'left'
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(240,237,232,0.3)', marginBottom: 14 }}>
-            Como funciona
-          </div>
           {[
-            { n: '1', text: 'Entre no grupo do WhatsApp abaixo' },
-            { n: '2', text: 'Escolha e pague pelo seu bilhete' },
-            { n: '3', text: 'Aguarde o sorteio ao vivo no grupo' },
-            { n: '4', text: 'Ganhe e receba o prêmio!' },
-          ].map((s, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: i < 3 ? 12 : 0 }}>
-              <span style={{
-                width: 26, height: 26, borderRadius: 8, flexShrink: 0,
-                background: 'rgba(255,215,0,0.12)', border: '1px solid rgba(255,215,0,0.2)',
-                color: '#ffd700', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-display)'
-              }}>{s.n}</span>
-              <span style={{ fontSize: 13, color: 'rgba(240,237,232,0.7)' }}>{s.text}</span>
+            { icon: '🎯', text: 'Ofertas exclusivas antes de todo mundo' },
+            { icon: '💰', text: 'Descontos que não aparecem em nenhum outro lugar' },
+            { icon: '📣', text: 'Conteúdo VIP direto no seu WhatsApp' },
+            { icon: '🔒', text: 'Grupo fechado — acesso apenas por convite' },
+          ].map((b, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: i < 3 ? 14 : 0 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{b.icon}</span>
+              <span style={{ fontSize: 14, color: 'rgba(240,237,232,0.75)', lineHeight: 1.4 }}>{b.text}</span>
             </div>
           ))}
         </div>
 
-        {/* CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          <div style={{ display: 'flex' }}>
+            {['😊','🙂','😄','🤩','😎'].map((e, i) => (
+              <div key={i} style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: `hsl(${120 + i * 25}, 50%, 35%)`,
+                border: '2px solid #0a0a0a', marginLeft: i > 0 ? -8 : 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14
+              }}>{e}</div>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, color: 'rgba(240,237,232,0.5)' }}>
+            <strong style={{ color: 'rgba(240,237,232,0.8)' }}>{memberCount.toLocaleString('pt-BR')} pessoas</strong> já estão no grupo
+          </span>
+        </div>
+
         <a
           href={group.whatsapp_url}
           target="_blank"
           rel="noreferrer"
-          onClick={onJoinClick}
+          onClick={handleJoinClick}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
             background: 'linear-gradient(135deg, #25D366, #1aad52)',
@@ -224,42 +228,29 @@ export default function RifaRedirectPage({ group, onJoinClick }) {
           }}
         >
           <span style={{ fontSize: 22 }}>📲</span>
-          QUERO MEU BILHETE AGORA
+          QUERO ENTRAR AGORA
         </a>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4444', display: 'inline-block', animation: 'blink 1s infinite' }} />
-          <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.4)' }}>
-            Apenas <strong style={{ color: '#ff9966' }}>{spotsLeft} bilhetes restantes</strong> — não perca sua chance!
+          <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.45)' }}>
+            Restam apenas <strong style={{ color: '#ff9966' }}>{spotsLeft} vagas</strong> — o grupo pode fechar a qualquer momento
           </span>
         </div>
 
-        <p style={{ fontSize: 11, color: 'rgba(240,237,232,0.18)', marginTop: 32, lineHeight: 1.6, textAlign: 'center' }}>
-          🔒 Rifa organizada de forma transparente. Sorteio realizado ao vivo no grupo.
+        <p style={{ fontSize: 11, color: 'rgba(240,237,232,0.2)', marginTop: 32, lineHeight: 1.6 }}>
+          🔒 Seus dados estão seguros. Ao entrar, você concorda em receber<br />conteúdos e ofertas exclusivas via WhatsApp.
         </p>
       </div>
 
       <style>{`
-        @keyframes trophyBounce {
-          0%,100% { transform: translateY(0) rotate(-3deg); }
-          50% { transform: translateY(-10px) rotate(3deg); }
+        @keyframes iconPulse {
+          0%,100% { box-shadow: 0 0 40px rgba(37,211,102,0.2); }
+          50% { box-shadow: 0 0 80px rgba(37,211,102,0.45); }
         }
-        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; } 100% { background-position: -200% 0; }
-        }
-        @keyframes float0 {
-          0%,100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(180deg); }
-        }
-        @keyframes float1 {
-          0%,100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-30px) rotate(-120deg); }
-        }
-        @keyframes float2 {
-          0%,100% { transform: translateY(0px); }
-          33% { transform: translateY(-15px); }
-          66% { transform: translateY(-25px); }
+        @keyframes blink {
+          0%,100% { opacity: 1; }
+          50% { opacity: 0.3; }
         }
       `}</style>
     </div>
