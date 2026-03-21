@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import RifaRedirectPage from './RifaRedirectPage'
 
 const PIXEL_ID = '1786202755146767'
 
@@ -40,7 +41,7 @@ export default function RedirectPage() {
     async function load() {
       const { data, error } = await supabase
         .from('groups')
-        .select('id, name, whatsapp_url, active')
+        .select('id, name, whatsapp_url, active, page_type, page_meta')
         .eq('slug', slug)
         .single()
 
@@ -102,6 +103,12 @@ export default function RedirectPage() {
       <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Tente novamente mais tarde.</p>
     </div>
   )
+
+
+  // Route to rifa page if page_type === 'rifa'
+  if (group.page_type === 'rifa') {
+    return <RifaRedirectPage group={group} onJoinClick={handleJoinClick} />
+  }
 
   const memberCount = fakeMemberCount(group.name)
 
