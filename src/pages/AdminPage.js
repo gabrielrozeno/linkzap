@@ -1,5 +1,6 @@
+import React, { useState, useEffect, useCallback } from "react";
 import SetsPanel from "../components/SetsPanel";
-import { useState, useEffect, useCallback } from "react";
+
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/AuthContext";
 
@@ -13,6 +14,92 @@ const generateSlug = (name) =>
   "-" +
   Math.random().toString(36).substr(2, 4);
 
+
+const PAGE_TYPES = [
+  { value: "standard", label: "⭐ Padrão", desc: "Promoções e conteúdo exclusivo" },
+  { value: "rifa",     label: "🏆 Rifa",   desc: "Sorteio com prêmio em destaque" },
+];
+
+function PageTypeSelector({ value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 10 }}>
+      {PAGE_TYPES.map((pt) => (
+        <button
+          key={pt.value}
+          type="button"
+          onClick={() => onChange(pt.value)}
+          style={{
+            flex: 1, padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+            border: `1.5px solid ${value === pt.value ? "rgba(37,211,102,0.5)" : "var(--border)"}`,
+            background: value === pt.value ? "rgba(37,211,102,0.08)" : "rgba(255,255,255,0.02)",
+            color: value === pt.value ? "var(--green)" : "var(--text-dim)",
+            transition: "all 0.15s", textAlign: "left",
+          }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{pt.label}</div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{pt.desc}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RifaFields({ meta, onChange }) {
+  return (
+    <div style={{ background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 10, padding: "16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div>
+        <label className="label">🏆 Prêmio em destaque</label>
+        <input className="input" placeholder="Ex: iPhone 15 Pro" value={meta.prize || ""} onChange={(e) => onChange({ ...meta, prize: e.target.value })} />
+      </div>
+      <div>
+        <label className="label">💵 Preço do bilhete</label>
+        <input className="input" placeholder="Ex: R$ 10,00" value={meta.ticket_price || ""} onChange={(e) => onChange({ ...meta, ticket_price: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+function EditModal({ group, onSave, onClose }) {
+  const [pageType, setPageType] = React.useState(group.page_type || "standard");
+  const [meta, setMeta] = React.useState(group.page_meta || {});
+  const [saving, setSaving] = React.useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("groups").update({ page_type: pageType, page_meta: meta }).eq("id", group.id);
+    setSaving(false);
+    if (!error) onSave(group.id, pageType, meta);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
+      <div className="card card-shine" style={{ width: "100%", maxWidth: 480, padding: 28 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700 }}>Editar tipo de página</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{group.name}</div>
+          </div>
+          <button className="btn btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <label className="label" style={{ marginBottom: 8, display: "block" }}>Tipo de página</label>
+        <PageTypeSelector value={pageType} onChange={setPageType} />
+        {pageType === "rifa" && (
+          <div style={{ marginTop: 16 }}>
+            <label className="label" style={{ marginBottom: 8, display: "block" }}>Informações da rifa</label>
+            <RifaFields meta={meta} onChange={setMeta} />
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 2 }}>
+            {saving ? <span className="spinner" /> : "Salvar alterações"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const t = setTimeout(onClose, 3000);
@@ -21,7 +108,7 @@ function Toast({ message, type, onClose }) {
   return <div className={`toast ${type}`}>{message}</div>;
 }
 
-function GroupCard({ group, onDelete, onToggle, onCopy, copiedId }) {
+function GroupCard({ group, onDelete, onToggle, onCopy, onEdit, copiedId }) {
   const baseUrl = window.location.origin;
   const generatedLink = `${baseUrl}/g/${group.slug}`;
 
@@ -104,6 +191,9 @@ function GroupCard({ group, onDelete, onToggle, onCopy, copiedId }) {
               >
                 {group.active ? "Ativo" : "Inativo"}
               </span>
+              <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: group.page_type === "rifa" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${group.page_type === "rifa" ? "rgba(255,215,0,0.25)" : "rgba(255,255,255,0.07)"}`, color: group.page_type === "rifa" ? "#ffd700" : "var(--text-muted)", letterSpacing: "1px", textTransform: "uppercase" }}>
+                {group.page_type === "rifa" ? "🏆 Rifa" : "⭐ Padrão"}
+              </span>
             </div>
           </div>
         </div>
@@ -133,6 +223,13 @@ function GroupCard({ group, onDelete, onToggle, onCopy, copiedId }) {
               cliques
             </div>
           </div>
+          <button
+            className="btn btn-icon"
+            title="Editar tipo de página"
+            onClick={() => onEdit(group)}
+          >
+            ✏️
+          </button>
           <button
             className={`btn btn-icon ${group.active ? "active" : ""}`}
             title={group.active ? "Pausar" : "Ativar"}
@@ -207,6 +304,14 @@ function GroupCard({ group, onDelete, onToggle, onCopy, copiedId }) {
           {copiedId === group.id ? "✓ Copiado" : "Copiar"}
         </button>
       </div>
+
+      {/* Rifa meta preview */}
+      {group.page_type === "rifa" && group.page_meta && (group.page_meta.prize || group.page_meta.ticket_price) && (
+        <div style={{ marginTop: 10, background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 8, padding: "8px 14px", display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {group.page_meta.prize && <span style={{ fontSize: 12, color: "rgba(255,215,0,0.7)" }}>🏆 {group.page_meta.prize}</span>}
+          {group.page_meta.ticket_price && <span style={{ fontSize: 12, color: "rgba(37,211,102,0.7)" }}>💵 {group.page_meta.ticket_price}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -216,11 +321,12 @@ export default function AdminPage() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", whatsapp_url: "" });
+  const [form, setForm] = useState({ name: "", whatsapp_url: "", page_type: "standard", page_meta: {} });
   const [errors, setErrors] = useState({});
   const [copiedId, setCopiedId] = useState(null);
   const [toast, setToast] = useState(null);
   const [activeTab, setActiveTab] = useState("groups");
+  const [editingGroup, setEditingGroup] = useState(null);
 
   const showToast = (message, type = "success") => setToast({ message, type });
 
@@ -258,13 +364,15 @@ export default function AdminPage() {
       whatsapp_url: form.whatsapp_url.trim(),
       slug: generateSlug(form.name.trim()),
       active: true,
+      page_type: form.page_type,
+      page_meta: form.page_meta,
     };
 
     const { error } = await supabase.from("groups").insert(newGroup);
     if (error) {
       showToast("Erro ao cadastrar grupo.", "error");
     } else {
-      setForm({ name: "", whatsapp_url: "" });
+      setForm({ name: "", whatsapp_url: "", page_type: "standard", page_meta: {} });
       showToast("✅ Grupo cadastrado com sucesso!");
       fetchGroups();
     }
@@ -301,6 +409,12 @@ export default function AdminPage() {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
     showToast("🔗 Link copiado!");
+  };
+
+  const handleEditSave = (id, pageType, meta) => {
+    setGroups((g) => g.map((x) => x.id === id ? { ...x, page_type: pageType, page_meta: meta } : x));
+    setEditingGroup(null);
+    showToast("✅ Tipo de página atualizado!");
   };
 
   const activeCount = groups.filter((g) => g.active).length;
@@ -524,6 +638,20 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
+              {/* Page type */}
+              <div style={{ marginBottom: 16 }}>
+                <label className="label" style={{ marginBottom: 8, display: "block" }}>Tipo de página</label>
+                <PageTypeSelector value={form.page_type} onChange={(v) => setForm({ ...form, page_type: v, page_meta: {} })} />
+              </div>
+
+              {/* Rifa extra fields */}
+              {form.page_type === "rifa" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label className="label" style={{ marginBottom: 8, display: "block" }}>Informações da rifa</label>
+                  <RifaFields meta={form.page_meta} onChange={(m) => setForm({ ...form, page_meta: m })} />
+                </div>
+              )}
+
               <button
                 className="btn btn-primary"
                 onClick={handleAdd}
@@ -600,6 +728,7 @@ export default function AdminPage() {
                   onDelete={handleDelete}
                   onToggle={handleToggle}
                   onCopy={handleCopy}
+                  onEdit={setEditingGroup}
                   copiedId={copiedId}
                 />
               ))
@@ -611,6 +740,14 @@ export default function AdminPage() {
 
         <div style={{ height: 60 }} />
       </div>
+
+      {editingGroup && (
+        <EditModal
+          group={editingGroup}
+          onSave={handleEditSave}
+          onClose={() => setEditingGroup(null)}
+        />
+      )}
 
       {toast && (
         <Toast
