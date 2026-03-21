@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react'
 
-function fakeSpotsLeft(seed) {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
-  return 23 + (Math.abs(h) % 74)
-}
-
 export default function RifaRedirectPage({ group, onJoinClick }) {
   const [pulse, setPulse] = useState(false)
   const [tick, setTick] = useState(0)
@@ -13,7 +7,13 @@ export default function RifaRedirectPage({ group, onJoinClick }) {
   const meta = group.page_meta || {}
   const prize = meta.prize || 'Prêmio Especial'
   const ticketPrice = meta.ticket_price || null
-  const spotsLeft = fakeSpotsLeft(group.name)
+
+  // Real ticket data from page_meta
+  const totalTickets = parseInt(meta.total_tickets) || 0
+  const soldTickets  = parseInt(meta.sold_tickets)  || 0
+  const spotsLeft    = totalTickets > 0 ? Math.max(0, totalTickets - soldTickets) : null
+  const pct          = totalTickets > 0 ? Math.min(100, Math.round((soldTickets / totalTickets) * 100)) : null
+
   const viewersNow = 12 + (tick % 5)
 
   useEffect(() => {
@@ -63,7 +63,10 @@ export default function RifaRedirectPage({ group, onJoinClick }) {
       }}>
         <span style={{ fontSize: 15 }}>⚠️</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-          ÚLTIMOS <strong style={{ fontSize: 15, textDecoration: 'underline' }}>{spotsLeft} BILHETES</strong> DISPONÍVEIS — CORRE!
+          {spotsLeft !== null
+            ? <>ÚLTIMOS <strong style={{ fontSize: 15, textDecoration: 'underline' }}>{spotsLeft} BILHETES</strong> DISPONÍVEIS — CORRE!</>
+            : <>🔥 VAGAS LIMITADAS — GARANTA O SEU BILHETE AGORA! 🔥</>
+          }
         </span>
         <span style={{ fontSize: 15 }}>⚠️</span>
       </div>
@@ -141,13 +144,15 @@ export default function RifaRedirectPage({ group, onJoinClick }) {
               </div>
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,100,0,0.1)', border: '1px solid rgba(255,100,0,0.25)', borderRadius: 30, padding: '8px 16px' }}>
-            <span style={{ fontSize: 16 }}>🎟️</span>
-            <div>
-              <div style={{ fontSize: 10, color: 'rgba(240,237,232,0.35)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Restam</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9944', fontFamily: 'var(--font-display)' }}>{spotsLeft} bilhetes</div>
+          {spotsLeft !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,100,0,0.1)', border: '1px solid rgba(255,100,0,0.25)', borderRadius: 30, padding: '8px 16px' }}>
+              <span style={{ fontSize: 16 }}>🎟️</span>
+              <div>
+                <div style={{ fontSize: 10, color: 'rgba(240,237,232,0.35)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Restam</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9944', fontFamily: 'var(--font-display)' }}>{spotsLeft} bilhetes</div>
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 30, padding: '8px 16px' }}>
             <span style={{ fontSize: 16 }}>✅</span>
             <div>
@@ -204,9 +209,47 @@ export default function RifaRedirectPage({ group, onJoinClick }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4444', display: 'inline-block', animation: 'rifaBlink 1s infinite' }} />
           <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.4)' }}>
-            Apenas <strong style={{ color: '#ff9966' }}>{spotsLeft} bilhetes restantes</strong> — não perca sua chance!
+            {spotsLeft !== null
+              ? <>Apenas <strong style={{ color: '#ff9966' }}>{spotsLeft} bilhetes restantes</strong> — não perca sua chance!</>
+              : <>Vagas <strong style={{ color: '#ff9966' }}>limitadas</strong> — não perca sua chance!</>
+            }
           </span>
         </div>
+
+        {/* PROGRESS BAR — only shown when total_tickets is set */}
+        {pct !== null && (
+          <div style={{ width: '100%', marginTop: 20, padding: '16px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: 'rgba(240,237,232,0.5)' }}>
+                <strong style={{ color: 'rgba(240,237,232,0.8)' }}>{soldTickets}</strong> de {totalTickets} bilhetes vendidos
+              </span>
+              <span style={{
+                fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-display)',
+                color: pct >= 80 ? '#ff6b35' : '#ffd700',
+                background: pct >= 80 ? 'rgba(255,107,53,0.12)' : 'rgba(255,215,0,0.1)',
+                border: `1px solid ${pct >= 80 ? 'rgba(255,107,53,0.3)' : 'rgba(255,215,0,0.25)'}`,
+                padding: '3px 10px', borderRadius: 20
+              }}>
+                {pct}% vendido
+              </span>
+            </div>
+            <div style={{ height: 10, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${pct}%`, borderRadius: 99,
+                background: pct >= 80
+                  ? 'linear-gradient(90deg, #ff6b35, #ff2d20)'
+                  : 'linear-gradient(90deg, #ffd700, #ff9900)',
+                transition: 'width 0.6s ease',
+                boxShadow: pct >= 80 ? '0 0 12px rgba(255,107,53,0.5)' : '0 0 12px rgba(255,215,0,0.4)'
+              }} />
+            </div>
+            {spotsLeft === 0 && (
+              <p style={{ fontSize: 11, color: '#ff6b35', textAlign: 'center', marginTop: 8, fontWeight: 600 }}>
+                ⚠️ Todos os bilhetes foram vendidos!
+              </p>
+            )}
+          </div>
+        )}
 
         <p style={{ fontSize: 11, color: 'rgba(240,237,232,0.18)', marginTop: 32, lineHeight: 1.6, textAlign: 'center' }}>
           🔒 Rifa organizada de forma transparente. Sorteio realizado ao vivo no grupo.

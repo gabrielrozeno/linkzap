@@ -45,16 +45,42 @@ function PageTypeSelector({ value, onChange }) {
 }
 
 function RifaFields({ meta, onChange }) {
+  const total = parseInt(meta.total_tickets) || 0;
+  const sold  = parseInt(meta.sold_tickets)  || 0;
+  const remaining = Math.max(0, total - sold);
+  const pct = total > 0 ? Math.min(100, Math.round((sold / total) * 100)) : 0;
+
   return (
-    <div style={{ background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 10, padding: "16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-      <div>
-        <label className="label">🏆 Prêmio em destaque</label>
-        <input className="input" placeholder="Ex: iPhone 15 Pro" value={meta.prize || ""} onChange={(e) => onChange({ ...meta, prize: e.target.value })} />
+    <div style={{ background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 10, padding: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div>
+          <label className="label">🏆 Prêmio em destaque</label>
+          <input className="input" placeholder="Ex: iPhone 15 Pro" value={meta.prize || ""} onChange={(e) => onChange({ ...meta, prize: e.target.value })} />
+        </div>
+        <div>
+          <label className="label">💵 Preço do bilhete</label>
+          <input className="input" placeholder="Ex: R$ 10,00" value={meta.ticket_price || ""} onChange={(e) => onChange({ ...meta, ticket_price: e.target.value })} />
+        </div>
+        <div>
+          <label className="label">🎟️ Total de bilhetes</label>
+          <input className="input" type="number" min="1" placeholder="Ex: 200" value={meta.total_tickets || ""} onChange={(e) => onChange({ ...meta, total_tickets: e.target.value })} />
+        </div>
+        <div>
+          <label className="label">✅ Bilhetes vendidos</label>
+          <input className="input" type="number" min="0" placeholder="Ex: 47" value={meta.sold_tickets || ""} onChange={(e) => onChange({ ...meta, sold_tickets: e.target.value })} />
+        </div>
       </div>
-      <div>
-        <label className="label">💵 Preço do bilhete</label>
-        <input className="input" placeholder="Ex: R$ 10,00" value={meta.ticket_price || ""} onChange={(e) => onChange({ ...meta, ticket_price: e.target.value })} />
-      </div>
+      {total > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(240,237,232,0.45)", marginBottom: 6 }}>
+            <span>{sold} vendidos · {remaining} restantes</span>
+            <span style={{ color: pct >= 80 ? "#ff6b35" : "#ffd700", fontWeight: 700 }}>{pct}% vendido</span>
+          </div>
+          <div style={{ height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "linear-gradient(90deg,#ff6b35,#ff2d20)" : "linear-gradient(90deg,#ffd700,#ff9900)", borderRadius: 99, transition: "width 0.4s" }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -306,11 +332,34 @@ function GroupCard({ group, onDelete, onToggle, onCopy, onEdit, copiedId }) {
       </div>
 
       {/* Rifa meta preview */}
-      {group.page_type === "rifa" && group.page_meta && (group.page_meta.prize || group.page_meta.ticket_price) && (
-        <div style={{ marginTop: 10, background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 8, padding: "8px 14px", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {group.page_meta.prize && <span style={{ fontSize: 12, color: "rgba(255,215,0,0.7)" }}>🏆 {group.page_meta.prize}</span>}
-          {group.page_meta.ticket_price && <span style={{ fontSize: 12, color: "rgba(37,211,102,0.7)" }}>💵 {group.page_meta.ticket_price}</span>}
-        </div>
+      {group.page_type === "rifa" && group.page_meta && (
+        (() => {
+          const m = group.page_meta;
+          const total = parseInt(m.total_tickets) || 0;
+          const sold  = parseInt(m.sold_tickets)  || 0;
+          const remaining = Math.max(0, total - sold);
+          const pct = total > 0 ? Math.min(100, Math.round((sold / total) * 100)) : 0;
+          return (
+            <div style={{ marginTop: 10, background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 8, padding: "10px 14px" }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: total > 0 ? 10 : 0 }}>
+                {m.prize && <span style={{ fontSize: 12, color: "rgba(255,215,0,0.7)" }}>🏆 {m.prize}</span>}
+                {m.ticket_price && <span style={{ fontSize: 12, color: "rgba(37,211,102,0.7)" }}>💵 {m.ticket_price}</span>}
+                {total > 0 && <span style={{ fontSize: 12, color: "rgba(255,153,68,0.8)" }}>🎟️ {remaining} restantes de {total}</span>}
+              </div>
+              {total > 0 && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(240,237,232,0.35)", marginBottom: 4 }}>
+                    <span>{sold} vendidos</span>
+                    <span style={{ color: pct >= 80 ? "#ff6b35" : "#ffd700", fontWeight: 700 }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "linear-gradient(90deg,#ff6b35,#ff2d20)" : "linear-gradient(90deg,#ffd700,#ff9900)", borderRadius: 99 }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
     </div>
   );
